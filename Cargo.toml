@@ -1,0 +1,21 @@
+[package]
+name = "crimson-crab-mcp-template"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["singhpratech"]
+description = "A ready-to-clone Rust MCP server that calls Anthropic's Claude API via crimson-crab"
+repository = "https://github.com/singhpratech/crimson-crab-mcp-template"
+homepage = "https://github.com/singhpratech/crimson-crab-mcp-template"
+keywords = ["mcp", "claude", "anthropic", "ai"]
+categories = ["command-line-utilities", "api-bindings"]
+publish = false
+
+[dependencies]
+crimson-crab = "0.1"
+rmcp = { version = "2.2", features = ["server", "macros", "transport-io"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+serde = { version = "1", features = ["derive"] }
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

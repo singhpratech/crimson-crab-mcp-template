@@ -1,0 +1,3 @@
+[template]
+description = "A ready-to-clone Rust MCP server that calls Anthropic's Claude API via crimson-crab"
+exclude = ["target", ".git"]
