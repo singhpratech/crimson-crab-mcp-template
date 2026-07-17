@@ -1,0 +1,21 @@
+# Smithery configuration — https://smithery.ai/docs/build/project-config/smithery.yaml
+# Local stdio MCP server. Build/install the binary first:
+#   cargo install --path .
+# (or `cargo build --release` and point `command` at target/release/crimson-crab-mcp-template)
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - anthropicApiKey
+    properties:
+      anthropicApiKey:
+        type: string
+        title: Anthropic API key
+        description: Your Anthropic API key (sk-ant-...), used to call the Claude API.
+  commandFunction: |
+    (config) => ({
+      command: 'crimson-crab-mcp-template',
+      args: [],
+      env: { ANTHROPIC_API_KEY: config.anthropicApiKey }
+    })
