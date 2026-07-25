@@ -1,5 +1,9 @@
 # Claude-powered MCP server in Rust (starter template)
 
+[![crimson-crab-mcp-template MCP server](https://glama.ai/mcp/servers/singhpratech/crimson-crab-mcp-template/badges/score.svg)](https://glama.ai/mcp/servers/singhpratech/crimson-crab-mcp-template)
+[![crates.io](https://img.shields.io/crates/v/crimson-crab.svg?label=crimson-crab)](https://crates.io/crates/crimson-crab)
+[![license](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
+
 A minimal, production-ready [Model Context Protocol](https://modelcontextprotocol.io)
 (MCP) server, written in Rust, that exposes a single tool — `ask_claude` — backed
 by Anthropic's Claude API through the [`crimson-crab`](https://crates.io/crates/crimson-crab)
