@@ -135,9 +135,9 @@ dependencies = [
 
 [[package]]
 name = "crimson-crab"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62233f85b1eeca9b7aa8e2b7d1e32eda15de2a9ffaadbf7b9749123fd9693eb3"
+checksum = "981f8af775a7b8296d2e3368985190e348dfc84b1bf6726365aa68b3ad8dff04"
 dependencies = [
  "bytes",
  "fastrand",

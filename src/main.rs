@@ -85,8 +85,17 @@ impl ClaudeServer {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for ClaudeServer {
     fn get_info(&self) -> ServerInfo {
+        // Build the identity from *this* crate's environment. `Implementation::
+        // from_build_env()` looks like the right call but expands `env!` inside
+        // rmcp, so it would report the transport crate ("rmcp") as the server
+        // name rather than this server.
+        let implementation = Implementation::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
+            .with_title("Claude (crimson-crab)")
+            .with_description(env!("CARGO_PKG_DESCRIPTION"))
+            .with_website_url(env!("CARGO_PKG_REPOSITORY"));
+
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::from_build_env())
+            .with_server_info(implementation)
             .with_instructions(
                 "Exposes an `ask_claude` tool that forwards a prompt to Anthropic's \
                  Claude and returns the reply."
