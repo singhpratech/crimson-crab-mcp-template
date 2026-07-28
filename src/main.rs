@@ -6,7 +6,7 @@
 //! Claude Desktop) at the built binary and it can call `ask_claude` to have this
 //! server forward a prompt to Claude and return the reply.
 
-use crimson_crab::model_ids::CLAUDE_OPUS_4_8;
+use crimson_crab::model_ids::CLAUDE_OPUS_5;
 use crimson_crab::prelude::*;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -54,7 +54,7 @@ impl ClaudeServer {
         Parameters(AskClaudeArgs { prompt, system }): Parameters<AskClaudeArgs>,
     ) -> Result<CallToolResult, McpError> {
         let mut builder = MessagesRequest::builder()
-            .model(CLAUDE_OPUS_4_8)
+            .model(CLAUDE_OPUS_5)
             .max_tokens(1024)
             .messages(vec![MessageParam::user(prompt)]);
         if let Some(system) = system {
