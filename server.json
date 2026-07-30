@@ -1,0 +1,10 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.singhpratech/crimson-crab-mcp-template",
+  "description": "Ready-to-clone Rust MCP server with ask_claude, count_tokens, and list_models tools for Claude",
+  "repository": {
+    "url": "https://github.com/singhpratech/crimson-crab-mcp-template",
+    "source": "github"
+  },
+  "version": "0.2.0"
+}

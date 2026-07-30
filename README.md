@@ -5,10 +5,11 @@
 [![license](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
 
 A minimal, production-ready [Model Context Protocol](https://modelcontextprotocol.io)
-(MCP) server, written in Rust, that exposes a single tool — `ask_claude` — backed
-by Anthropic's Claude API through the [`crimson-crab`](https://crates.io/crates/crimson-crab)
-SDK. When an MCP client (such as Claude Desktop) calls the tool, the server sends
-the prompt to Claude and returns Claude's text answer.
+(MCP) server, written in Rust, backed by Anthropic's Claude API through the
+[`crimson-crab`](https://crates.io/crates/crimson-crab) SDK. It exposes three
+tools: `ask_claude` (send a prompt, get Claude's reply), `count_tokens` (price a
+prompt without running it), and `list_models` (enumerate the models your API key
+can use).
 
 Use it as the reference starting point for building your own Claude-powered MCP
 tools in Rust.
@@ -65,19 +66,43 @@ key through the environment:
 }
 ```
 
-Restart Claude Desktop; the `ask_claude` tool will then be available.
+Restart Claude Desktop; the `ask_claude`, `count_tokens`, and `list_models`
+tools will then be available.
 
-## What `ask_claude` does
+## The tools
+
+### `ask_claude`
 
 | Parameter | Type              | Required | Description                        |
 | --------- | ----------------- | -------- | ---------------------------------- |
 | `prompt`  | `string`          | yes      | The prompt to send to Claude.      |
 | `system`  | `string`          | no       | Optional system prompt.            |
 
-The tool builds a Claude Messages request (defaulting to the `claude-opus-4-8`
-model), calls the API, and returns the concatenated text of Claude's reply. Errors
-are returned as MCP tool errors rather than panicking. The Claude client is built
-once at startup and reused across calls.
+Builds a Claude Messages request (defaulting to the `claude-opus-5` model),
+calls the API, and returns the concatenated text of Claude's reply.
+
+### `count_tokens`
+
+| Parameter | Type              | Required | Description                                        |
+| --------- | ----------------- | -------- | -------------------------------------------------- |
+| `prompt`  | `string`          | yes      | The prompt whose token count you want.             |
+| `system`  | `string`          | no       | Optional system prompt to include in the count.    |
+| `model`   | `string`          | no       | Model id to count against (counts are model-specific). |
+
+Returns the number of input tokens the prompt would consume, without running
+it — useful for estimating cost before an expensive call.
+
+### `list_models`
+
+| Parameter | Type              | Required | Description                                    |
+| --------- | ----------------- | -------- | ---------------------------------------------- |
+| `limit`   | `number`          | no       | Maximum number of models to return.            |
+
+Returns the id, display name, and release date of each Claude model available
+to the configured API key.
+
+Errors from all tools are returned as MCP tool errors rather than panicking.
+The Claude client is built once at startup and reused across calls.
 
 ## Built with crimson-crab
 

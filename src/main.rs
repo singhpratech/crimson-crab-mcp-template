@@ -1,11 +1,14 @@
-//! A minimal, production-ready Model Context Protocol (MCP) server that
-//! exposes a single tool, `ask_claude`, backed by Anthropic's Claude API.
+//! A minimal, production-ready Model Context Protocol (MCP) server backed by
+//! Anthropic's Claude API. It exposes three tools: `ask_claude` (send a prompt,
+//! get the reply), `count_tokens` (price a prompt without running it), and
+//! `list_models` (enumerate the models the API key can use).
 //!
 //! The server speaks MCP over stdio: **stdout is the protocol channel**, so all
 //! human-readable logging is sent to stderr. Point any MCP client (for example
-//! Claude Desktop) at the built binary and it can call `ask_claude` to have this
-//! server forward a prompt to Claude and return the reply.
+//! Claude Desktop) at the built binary and it can call the tools to have this
+//! server forward requests to Claude.
 
+use crimson_crab::api::ModelListParams;
 use crimson_crab::model_ids::CLAUDE_OPUS_5;
 use crimson_crab::prelude::*;
 use rmcp::handler::server::router::tool::ToolRouter;
@@ -24,6 +27,28 @@ pub struct AskClaudeArgs {
     /// Optional system prompt that steers Claude's behavior.
     #[serde(default)]
     pub system: Option<String>,
+}
+
+/// Arguments for the `count_tokens` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct CountTokensArgs {
+    /// The prompt whose token count you want.
+    pub prompt: String,
+    /// Optional system prompt to include in the count.
+    #[serde(default)]
+    pub system: Option<String>,
+    /// Model id to count against (counts are model-specific). Defaults to the
+    /// same model `ask_claude` uses.
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
+/// Arguments for the `list_models` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct ListModelsArgs {
+    /// Maximum number of models to return (the API defaults to 20).
+    #[serde(default)]
+    pub limit: Option<u32>,
 }
 
 /// The MCP server. Holds a single, reusable Claude client that is built once at
@@ -80,6 +105,73 @@ impl ClaudeServer {
             ))])),
         }
     }
+
+    /// Count how many input tokens a prompt would consume, without running it.
+    #[tool(
+        description = "Count the input tokens a prompt would consume for a given Claude model, without sending it."
+    )]
+    async fn count_tokens(
+        &self,
+        Parameters(CountTokensArgs {
+            prompt,
+            system,
+            model,
+        }): Parameters<CountTokensArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        let model = model.unwrap_or_else(|| CLAUDE_OPUS_5.to_string());
+        let mut request = CountTokensRequest::new(&model, vec![MessageParam::user(prompt)]);
+        request.system = system.map(Into::into);
+
+        match self.client.messages().count_tokens(&request).await {
+            Ok(response) => Ok(CallToolResult::success(vec![ContentBlock::text(
+                serde_json::json!({
+                    "model": model,
+                    "input_tokens": response.input_tokens,
+                })
+                .to_string(),
+            )])),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "token count failed: {err}"
+            ))])),
+        }
+    }
+
+    /// List the Claude models available to the configured API key.
+    #[tool(description = "List the Claude models available to the configured Anthropic API key.")]
+    async fn list_models(
+        &self,
+        Parameters(ListModelsArgs { limit }): Parameters<ListModelsArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        let params = ModelListParams {
+            limit,
+            ..Default::default()
+        };
+
+        match self.client.models().list(&params).await {
+            Ok(page) => {
+                let models: Vec<serde_json::Value> = page
+                    .data
+                    .iter()
+                    .map(|m| {
+                        serde_json::json!({
+                            "id": m.id,
+                            "display_name": m.display_name,
+                            "created_at": m.created_at,
+                        })
+                    })
+                    .collect();
+                match serde_json::to_string_pretty(&models) {
+                    Ok(json) => Ok(CallToolResult::success(vec![ContentBlock::text(json)])),
+                    Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                        "failed to serialize model list: {err}"
+                    ))])),
+                }
+            }
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "model list failed: {err}"
+            ))])),
+        }
+    }
 }
 
 #[tool_handler(router = self.tool_router)]
@@ -97,8 +189,10 @@ impl ServerHandler for ClaudeServer {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(implementation)
             .with_instructions(
-                "Exposes an `ask_claude` tool that forwards a prompt to Anthropic's \
-                 Claude and returns the reply."
+                "Tools backed by Anthropic's Claude API: `ask_claude` forwards a \
+                 prompt to Claude and returns the reply, `count_tokens` prices a \
+                 prompt without running it, and `list_models` enumerates the \
+                 models available to the configured API key."
                     .to_string(),
             )
     }
