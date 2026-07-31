@@ -6,10 +6,11 @@
 
 A minimal, production-ready [Model Context Protocol](https://modelcontextprotocol.io)
 (MCP) server, written in Rust, backed by Anthropic's Claude API through the
-[`crimson-crab`](https://crates.io/crates/crimson-crab) SDK. It exposes three
-tools: `ask_claude` (send a prompt, get Claude's reply), `count_tokens` (price a
-prompt without running it), and `list_models` (enumerate the models your API key
-can use).
+[`crimson-crab`](https://crates.io/crates/crimson-crab) SDK. It exposes five
+tools: `ask_claude` (send a prompt, get Claude's reply), `chat` (multi-turn
+conversation), `count_tokens` (price a prompt without running it), `list_models`
+(enumerate the models your API key can use), and `get_model` (limits and
+metadata for one model).
 
 Use it as the reference starting point for building your own Claude-powered MCP
 tools in Rust.
@@ -66,8 +67,8 @@ key through the environment:
 }
 ```
 
-Restart Claude Desktop; the `ask_claude`, `count_tokens`, and `list_models`
-tools will then be available.
+Restart Claude Desktop; the `ask_claude`, `chat`, `count_tokens`,
+`list_models`, and `get_model` tools will then be available.
 
 ## The tools
 
@@ -80,6 +81,18 @@ tools will then be available.
 
 Builds a Claude Messages request (defaulting to the `claude-opus-5` model),
 calls the API, and returns the concatenated text of Claude's reply.
+
+### `chat`
+
+| Parameter    | Type       | Required | Description                                              |
+| ------------ | ---------- | -------- | -------------------------------------------------------- |
+| `messages`   | `array`    | yes      | The conversation so far, oldest first: `{role, content}` with role `"user"` or `"assistant"`. Must end with a user turn. |
+| `system`     | `string`   | no       | Optional system prompt.                                  |
+| `model`      | `string`   | no       | Model id (defaults to the `ask_claude` model).           |
+| `max_tokens` | `number`   | no       | Maximum tokens to generate (default 1024).               |
+
+Sends the whole message history to Claude and returns the next reply — use it
+instead of `ask_claude` when the caller needs to keep context across turns.
 
 ### `count_tokens`
 
@@ -100,6 +113,15 @@ it — useful for estimating cost before an expensive call.
 
 Returns the id, display name, and release date of each Claude model available
 to the configured API key.
+
+### `get_model`
+
+| Parameter | Type              | Required | Description                                    |
+| --------- | ----------------- | -------- | ---------------------------------------------- |
+| `model`   | `string`          | yes      | The model id to look up, e.g. `claude-opus-5`. |
+
+Returns the model's display name, release date, context window
+(`max_input_tokens`), and maximum output tokens.
 
 Errors from all tools are returned as MCP tool errors rather than panicking.
 The Claude client is built once at startup and reused across calls.

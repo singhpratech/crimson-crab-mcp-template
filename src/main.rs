@@ -1,7 +1,8 @@
 //! A minimal, production-ready Model Context Protocol (MCP) server backed by
-//! Anthropic's Claude API. It exposes three tools: `ask_claude` (send a prompt,
-//! get the reply), `count_tokens` (price a prompt without running it), and
-//! `list_models` (enumerate the models the API key can use).
+//! Anthropic's Claude API. It exposes five tools: `ask_claude` (send a prompt,
+//! get the reply), `chat` (multi-turn conversation), `count_tokens` (price a
+//! prompt without running it), `list_models` (enumerate the models the API key
+//! can use), and `get_model` (limits and metadata for one model).
 //!
 //! The server speaks MCP over stdio: **stdout is the protocol channel**, so all
 //! human-readable logging is sent to stderr. Point any MCP client (for example
@@ -27,6 +28,38 @@ pub struct AskClaudeArgs {
     /// Optional system prompt that steers Claude's behavior.
     #[serde(default)]
     pub system: Option<String>,
+}
+
+/// One turn of a `chat` conversation.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct ChatTurn {
+    /// Who spoke this turn: "user" or "assistant".
+    pub role: String,
+    /// The text of the turn.
+    pub content: String,
+}
+
+/// Arguments for the `chat` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct ChatArgs {
+    /// The conversation so far, oldest turn first. Must end with a "user" turn.
+    pub messages: Vec<ChatTurn>,
+    /// Optional system prompt that steers Claude's behavior.
+    #[serde(default)]
+    pub system: Option<String>,
+    /// Model id to use. Defaults to the same model `ask_claude` uses.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Maximum tokens Claude may generate (default 1024).
+    #[serde(default)]
+    pub max_tokens: Option<u32>,
+}
+
+/// Arguments for the `get_model` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct GetModelArgs {
+    /// The model id to look up, for example "claude-opus-5".
+    pub model: String,
 }
 
 /// Arguments for the `count_tokens` tool.
@@ -89,6 +122,59 @@ impl ClaudeServer {
         let request = match builder.build() {
             Ok(request) => request,
             // Return a tool-level error (visible to the caller) rather than panicking.
+            Err(err) => {
+                return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                    "failed to build request: {err}"
+                ))]));
+            }
+        };
+
+        match self.client.messages().create(&request).await {
+            Ok(message) => Ok(CallToolResult::success(vec![ContentBlock::text(
+                message.text(),
+            )])),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "Claude request failed: {err}"
+            ))])),
+        }
+    }
+
+    /// Continue a multi-turn conversation with Claude and return the reply.
+    #[tool(
+        description = "Continue a multi-turn conversation with Claude: send the whole message history and get the next reply."
+    )]
+    async fn chat(
+        &self,
+        Parameters(ChatArgs {
+            messages,
+            system,
+            model,
+            max_tokens,
+        }): Parameters<ChatArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        let mut params = Vec::with_capacity(messages.len());
+        for turn in messages {
+            match turn.role.as_str() {
+                "user" => params.push(MessageParam::user(turn.content)),
+                "assistant" => params.push(MessageParam::assistant(turn.content)),
+                other => {
+                    return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                        "invalid role {other:?}: each message role must be \"user\" or \"assistant\""
+                    ))]));
+                }
+            }
+        }
+
+        let mut builder = MessagesRequest::builder()
+            .model(model.unwrap_or_else(|| CLAUDE_OPUS_5.to_string()))
+            .max_tokens(max_tokens.unwrap_or(1024))
+            .messages(params);
+        if let Some(system) = system {
+            builder = builder.system(system);
+        }
+
+        let request = match builder.build() {
+            Ok(request) => request,
             Err(err) => {
                 return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
                     "failed to build request: {err}"
@@ -172,6 +258,31 @@ impl ClaudeServer {
             ))])),
         }
     }
+
+    /// Look up one model's limits and metadata.
+    #[tool(
+        description = "Get a Claude model's metadata: display name, release date, context window, and max output tokens."
+    )]
+    async fn get_model(
+        &self,
+        Parameters(GetModelArgs { model }): Parameters<GetModelArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        match self.client.models().get(&model).await {
+            Ok(info) => Ok(CallToolResult::success(vec![ContentBlock::text(
+                serde_json::json!({
+                    "id": info.id,
+                    "display_name": info.display_name,
+                    "created_at": info.created_at,
+                    "max_input_tokens": info.max_input_tokens,
+                    "max_tokens": info.max_tokens,
+                })
+                .to_string(),
+            )])),
+            Err(err) => Ok(CallToolResult::error(vec![ContentBlock::text(format!(
+                "model lookup failed: {err}"
+            ))])),
+        }
+    }
 }
 
 #[tool_handler(router = self.tool_router)]
@@ -190,9 +301,11 @@ impl ServerHandler for ClaudeServer {
             .with_server_info(implementation)
             .with_instructions(
                 "Tools backed by Anthropic's Claude API: `ask_claude` forwards a \
-                 prompt to Claude and returns the reply, `count_tokens` prices a \
-                 prompt without running it, and `list_models` enumerates the \
-                 models available to the configured API key."
+                 prompt to Claude and returns the reply, `chat` continues a \
+                 multi-turn conversation, `count_tokens` prices a prompt without \
+                 running it, `list_models` enumerates the models available to \
+                 the configured API key, and `get_model` returns one model's \
+                 limits and metadata."
                     .to_string(),
             )
     }
