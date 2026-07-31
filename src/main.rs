@@ -30,11 +30,36 @@ pub struct AskClaudeArgs {
     pub system: Option<String>,
 }
 
+/// Who spoke a turn of a `chat` conversation: `"user"` or `"assistant"`.
+///
+/// Modelling this as an enum (rather than a `String` checked at run time) makes
+/// the constraint machine-readable: the derived JSON schema carries
+/// `"enum": ["user", "assistant"]`, so MCP clients can see the allowed values
+/// up front instead of discovering them from an error message.
+///
+/// Two schemars details are deliberate here, because they decide whether that
+/// signal actually reaches the client:
+///
+/// - **No doc comments on the variants.** Documenting each variant would force
+///   schemars to emit `oneOf: [{const: "user"}, {const: "assistant"}]` so it has
+///   somewhere to hang the per-variant descriptions. That is valid JSON Schema
+///   but far less widely understood than a flat `enum` array.
+/// - **`#[schemars(inline)]`.** Without it the `role` property is just a
+///   `$ref` into `$defs`, and clients that do not resolve refs see no
+///   constraint at all. Inlining puts the `enum` directly on the property.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum ChatRole {
+    User,
+    Assistant,
+}
+
 /// One turn of a `chat` conversation.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct ChatTurn {
     /// Who spoke this turn: "user" or "assistant".
-    pub role: String,
+    pub role: ChatRole,
     /// The text of the turn.
     pub content: String,
 }
@@ -152,18 +177,16 @@ impl ClaudeServer {
             max_tokens,
         }): Parameters<ChatArgs>,
     ) -> Result<CallToolResult, McpError> {
-        let mut params = Vec::with_capacity(messages.len());
-        for turn in messages {
-            match turn.role.as_str() {
-                "user" => params.push(MessageParam::user(turn.content)),
-                "assistant" => params.push(MessageParam::assistant(turn.content)),
-                other => {
-                    return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
-                        "invalid role {other:?}: each message role must be \"user\" or \"assistant\""
-                    ))]));
-                }
-            }
-        }
+        // No invalid-role branch is needed: `ChatRole` is an enum, so a role
+        // outside {user, assistant} fails deserialization and rmcp reports it to
+        // the client as an invalid-params error before this body ever runs.
+        let params: Vec<MessageParam> = messages
+            .into_iter()
+            .map(|turn| match turn.role {
+                ChatRole::User => MessageParam::user(turn.content),
+                ChatRole::Assistant => MessageParam::assistant(turn.content),
+            })
+            .collect();
 
         let mut builder = MessagesRequest::builder()
             .model(model.unwrap_or_else(|| CLAUDE_OPUS_5.to_string()))

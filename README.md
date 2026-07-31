@@ -86,10 +86,10 @@ calls the API, and returns the concatenated text of Claude's reply.
 
 | Parameter    | Type       | Required | Description                                              |
 | ------------ | ---------- | -------- | -------------------------------------------------------- |
-| `messages`   | `array`    | yes      | The conversation so far, oldest first: `{role, content}` with role `"user"` or `"assistant"`. Must end with a user turn. |
+| `messages`   | `array`    | yes      | The conversation so far, oldest first: `{role, content}` where `role` is an enum constrained to `"user"` or `"assistant"`. Must end with a user turn. |
 | `system`     | `string`   | no       | Optional system prompt.                                  |
 | `model`      | `string`   | no       | Model id (defaults to the `ask_claude` model).           |
-| `max_tokens` | `number`   | no       | Maximum tokens to generate (default 1024).               |
+| `max_tokens` | `integer`  | no       | Maximum tokens to generate (default 1024).               |
 
 Sends the whole message history to Claude and returns the next reply — use it
 instead of `ask_claude` when the caller needs to keep context across turns.
@@ -109,7 +109,7 @@ it — useful for estimating cost before an expensive call.
 
 | Parameter | Type              | Required | Description                                    |
 | --------- | ----------------- | -------- | ---------------------------------------------- |
-| `limit`   | `number`          | no       | Maximum number of models to return.            |
+| `limit`   | `integer`         | no       | Maximum number of models to return.            |
 
 Returns the id, display name, and release date of each Claude model available
 to the configured API key.
